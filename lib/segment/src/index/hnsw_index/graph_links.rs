@@ -213,9 +213,7 @@ impl GraphLinksConverter {
         {
             let reindex_range = header.get_reindex_range();
             let reindex_byte_slice = &mut bytes_data[reindex_range];
-            let reindex_slice: &mut [PointOffsetType] =
-                mmap_ops::transmute_from_u8_to_mut_slice(reindex_byte_slice);
-            reindex_slice.copy_from_slice(&self.reindex);
+            reindex_byte_slice.copy_from_slice(mmap_ops::transmute_to_u8_slice(&self.reindex));
         }
 
         let header_levels_count = header.levels_count as usize;
@@ -227,31 +225,45 @@ impl GraphLinksConverter {
             let (links_mmap, offsets_mmap) = bytes_data[union_range]
                 .as_mut()
                 .split_at_mut(links_range.len());
-            let links_mmap: &mut [PointOffsetType] =
-                mmap_ops::transmute_from_u8_to_mut_slice(links_mmap);
-            let offsets_mmap: &mut [u64] = mmap_ops::transmute_from_u8_to_mut_slice(offsets_mmap);
-            offsets_mmap[0] = 0;
+
+            // Create two zeroed buffers that are the same size as the mmap ranges we'll be writing to.
+            debug_assert_eq!(
+                links_mmap.len() % std::mem::size_of::<PointOffsetType>(),
+                0,
+                "mmap slice length is not a multiple of PointOffsetType size"
+            );
+            let mut links_buf: Vec<PointOffsetType> =
+                vec![0; links_mmap.len() / std::mem::size_of::<PointOffsetType>()];
+            debug_assert_eq!(
+                offsets_mmap.len() % std::mem::size_of::<u64>(),
+                0,
+                "mmap slice length is not a multiple of u64 size"
+            );
+            let mut offsets_buf: Vec<u64> =
+                vec![0; offsets_mmap.len() / std::mem::size_of::<u64>()];
 
             let mut links_pos = 0;
             let mut offsets_pos = 1;
             for level in 0..header_levels_count {
                 level_offsets.push(offsets_pos as u64 - 1);
                 self.iterate_level_points(level, |_, links| {
-                    links_mmap[links_pos..links_pos + links.len()].copy_from_slice(links);
+                    links_buf[links_pos..links_pos + links.len()].copy_from_slice(links);
                     links_pos += links.len();
 
-                    offsets_mmap[offsets_pos] = links_pos as u64;
+                    offsets_buf[offsets_pos] = links_pos as u64;
                     offsets_pos += 1;
                 });
             }
+            // Copy the buffers into their respective mmap slices.
+            links_mmap.copy_from_slice(mmap_ops::transmute_to_u8_slice(&links_buf));
+            offsets_mmap.copy_from_slice(mmap_ops::transmute_to_u8_slice(&offsets_buf));
         }
 
         {
             let level_offsets_range = header.get_level_offsets_range();
             let level_offsets_byte_slice = &mut bytes_data[level_offsets_range];
-            let level_offsets_slice: &mut [u64] =
-                mmap_ops::transmute_from_u8_to_mut_slice(level_offsets_byte_slice);
-            level_offsets_slice.copy_from_slice(&level_offsets);
+            level_offsets_byte_slice
+                .copy_from_slice(mmap_ops::transmute_to_u8_slice(&level_offsets));
         }
     }
 
