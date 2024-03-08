@@ -101,14 +101,14 @@ pub fn transmute_from_u8_to_slice<T>(data: &[u8]) -> &[T] {
     debug_assert_eq!(data.len() % size_of::<T>(), 0);
     let len = data.len() / size_of::<T>();
     let ptr = data.as_ptr() as *const T;
-    unsafe { std::slice::from_raw_parts(ptr, len) }
+    unsafe { &*std::ptr::slice_from_raw_parts(ptr, len) }
 }
 
 pub fn transmute_from_u8_to_mut_slice<T>(data: &mut [u8]) -> &mut [T] {
     debug_assert_eq!(data.len() % size_of::<T>(), 0);
     let len = data.len() / size_of::<T>();
     let ptr = data.as_mut_ptr() as *mut T;
-    unsafe { std::slice::from_raw_parts_mut(ptr, len) }
+    unsafe { &mut *std::ptr::slice_from_raw_parts_mut(ptr, len) }
 }
 
 pub fn transmute_to_u8_slice<T>(v: &[T]) -> &[u8] {
